@@ -6,3 +6,6 @@ build/
 *.o
 *.elf
 *.iso
+
+# Image de livraison officielle KFS2
+!/images/kfs2.iso
