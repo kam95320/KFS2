@@ -1,0 +1,8 @@
+build/
+
+# Fichiers générés
+/build/
+/build-lab/
+*.o
+*.elf
+*.iso

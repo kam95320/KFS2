@@ -1,0 +1,37 @@
+.PHONY: all clean fclean re run
+
+all: kfs1.iso
+
+build/boot.o: src/boot.asm
+	mkdir -p build
+	nasm -f elf32 src/boot.asm -o build/boot.o
+
+build/kernel.o: src/kernel.c
+	mkdir -p build
+	gcc -m32 -ffreestanding -fno-stack-protector -fno-builtin \
+		-nostdlib -nodefaultlibs -fno-pie -fno-pic \
+		-fno-asynchronous-unwind-tables -fno-unwind-tables \
+		-c src/kernel.c -o build/kernel.o
+
+kernel.elf: build/boot.o build/kernel.o linker.ld
+	ld -m elf_i386 -T linker.ld \
+		-o kernel.elf \
+		build/boot.o build/kernel.o
+
+kfs1.iso: kernel.elf boot/grub/grub.cfg
+	mkdir -p build/iso/boot/grub
+	cp kernel.elf build/iso/boot/kernel.elf
+	cp boot/grub/grub.cfg build/iso/boot/grub/grub.cfg
+	grub-mkrescue -o kfs1.iso build/iso
+
+clean:
+	rm -rf build
+
+fclean: clean
+	rm -f kernel.elf kfs1.iso
+
+re: fclean
+	$(MAKE) all
+
+run: all
+	qemu-system-i386 -cdrom kfs1.iso
