@@ -13,16 +13,6 @@ align 4
 section .text
 global _start
 extern kernel_main
-global paging_enable
-
-paging_enable:
-    mov eax, [esp + 4]
-    mov cr3, eax
-
-    mov eax, cr0
-    or eax, 0x80000000
-    mov cr0, eax
-    ret
 ; ================================================================
 ; Installation de la GDT a l'adresse physique 0x00000800
 ; Mode protege x86 32 bits - NASM
@@ -91,69 +81,6 @@ _start:
     cli
     hlt
     jmp .halt
-
-extern page_fault_handler
-global page_fault_entry
-
-page_fault_entry:
-    pushad
-    cld
-
-    mov eax, esp
-    mov edx, [eax + 32]
-
-    and esp, -16
-    sub esp, 16
-    mov [esp], edx
-    mov [esp + 4], eax
-
-    call page_fault_handler
-
-    mov esp, [esp + 4]
-    popad
-    add esp, 4
-    iretd
-
-extern breakpoint_handler
-global breakpoint_entry
-
-breakpoint_entry:
-    push dword 0
-    pushad
-    cld
-
-    mov eax, esp
-    and esp, -16
-    sub esp, 16
-    mov [esp], eax
-
-    call breakpoint_handler
-
-    mov esp, [esp]
-    popad
-    add esp, 4
-    iretd
-
-extern timer_handler
-global timer_entry
-
-timer_entry:
-    push dword 0
-    pushad
-    cld
-
-    mov eax, esp
-    and esp, -16
-    sub esp, 16
-    mov [esp], eax
-
-    call timer_handler
-
-    mov esp, [esp]
-    popad
-    add esp, 4
-    iretd
-
 
 ; ================================================================
 ; Pile du noyau : 16 Kio

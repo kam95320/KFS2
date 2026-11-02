@@ -1,31 +1,46 @@
-.PHONY: all clean fclean re run
+CC = gcc
+LD = ld
+NASM = nasm
+BUILD = build
+KERNEL = $(BUILD)/kernel.elf
+ISO = $(BUILD)/kfs2.iso
+CFLAGS = -m32 -march=i386 -std=c99 -Wall -Wextra -Werror \
+	-ffreestanding -fno-stack-protector -fno-builtin \
+	-nostdlib -nodefaultlibs -fno-pie -fno-pic \
+	-fno-asynchronous-unwind-tables -fno-unwind-tables -MMD -MP
+SOURCES = src/kernel.c src/vga.c src/gdt.c src/stack.c
+OBJECTS = $(BUILD)/boot.o $(SOURCES:src/%.c=$(BUILD)/%.o)
 
-all: kfs1.iso
+.PHONY: all clean fclean re run check
+all: $(ISO)
 
-build-lab/boot.o: src/boot.asm
-	mkdir -p build-lab
-	nasm -f elf32 src/boot.asm -o build-lab/boot.o
+$(BUILD):
+	mkdir -p $@
 
-build-lab/kernel.o: src/kernel.c
-	mkdir -p build-lab
-	gcc -m32 -ffreestanding -fno-stack-protector -fno-builtin \
-		-nostdlib -nodefaultlibs -fno-pie -fno-pic \
-		-fno-asynchronous-unwind-tables -fno-unwind-tables \
-		-c src/kernel.c -o build-lab/kernel.o
+$(BUILD)/boot.o: src/boot.asm | $(BUILD)
+	$(NASM) -f elf32 $< -o $@
 
-kernel.elf: build-lab/boot.o build-lab/kernel.o linker.ld
-	ld -m elf_i386 -T linker.ld \
-		-o kernel.elf \
-		build-lab/boot.o build-lab/kernel.o
+$(BUILD)/%.o: src/%.c | $(BUILD)
+	$(CC) $(CFLAGS) -c $< -o $@
 
-kfs1.iso: kernel.elf boot/grub/grub.cfg
-	mkdir -p build-lab/iso/boot/grub
-	cp kernel.elf build-lab/iso/boot/kernel.elf
-	cp boot/grub/grub.cfg build-lab/iso/boot/grub/grub.cfg
-	grub-mkrescue -o kfs1.iso build-lab/iso
+$(KERNEL): $(OBJECTS) linker.ld
+	$(LD) -m elf_i386 -T linker.ld -o $@ $(OBJECTS)
+	test "$$(wc -c < $@)" -lt 10000000
+
+$(ISO): $(KERNEL) boot/grub/grub.cfg
+	mkdir -p $(BUILD)/iso/boot/grub
+	cp $(KERNEL) $(BUILD)/iso/boot/kernel.elf
+	cp boot/grub/grub.cfg $(BUILD)/iso/boot/grub/grub.cfg
+	grub-mkrescue -o $@ $(BUILD)/iso
+
+check: all
+	grub-file --is-x86-multiboot $(KERNEL)
+	test -z "$$(nm -u $(KERNEL))"
+	test "$$(wc -c < $(ISO))" -lt 10000000
+	python3 tests/check_boot.py $(abspath $(ISO)) $(abspath $(KERNEL)) $(abspath $(BUILD)/checks)
 
 clean:
-	rm -rf build-lab
+	rm -rf $(BUILD) build-lab
 
 fclean: clean
 	rm -f kernel.elf kfs1.iso
@@ -34,4 +49,6 @@ re: fclean
 	$(MAKE) all
 
 run: all
-	qemu-system-i386 -cdrom kfs1.iso
+	qemu-system-i386 -cdrom $(ISO)
+
+-include $(OBJECTS:.o=.d)
